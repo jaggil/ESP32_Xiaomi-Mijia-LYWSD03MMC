@@ -96,6 +96,15 @@ void registerNotification() {
   Serial.println(" - Found our characteristic");
   pRemoteCharacteristic_THB->registerForNotify(notifyCallback);
 }
+// before setup()   https://github.com/nkolban/esp32-snippets/issues/735
+static void my_gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t* param) {
+  ESP_LOGW(LOG_TAG, "custom gattc event handler, event: %d", (uint8_t)event);
+        if(event == ESP_GATTC_DISCONNECT_EVT) {
+                Serial.print("Disconnect reason: "); 
+                Serial.println((int)param->disconnect.reason);
+        }
+}
+
 unsigned long long currentMillis;
 unsigned long long previousMillis;
 unsigned long long interval = 60000000; //Lee T/H/Bat cada 1 minuto por notificaciones
@@ -108,6 +117,7 @@ void setup() {
   ESP32_info();
   
   Serial.println("Starting Mijia client...");
+  BLEDevice::setCustomGattcHandler(my_gattc_event_handler);  // before BLEDevice::init();https://github.com/nkolban/esp32-snippets/issues/735
   BLEDevice::init("ESP32");
   createBleClientWithCallbacks();
 
@@ -122,24 +132,24 @@ void loop()
   currentMillis = micros();  
   looptime = currentMillis;
 
-  if (!connectionSuccessful) 
-  {Serial.println("Reconectar....");
-  connectSensor(); Serial.println("Reconectado y registrado"); }
-
-  if(Nueva_Notificacion==true)
+  if (!connectionSuccessful){ Serial.println("Reconectar...."); connectSensor(); Serial.println("Reconectado y registrado"); }
+  else
   {
-    Nueva_Notificacion=false; 
-    pRemoteCharacteristic_THB->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t*)notificationOff, 2, true);    
-    Serial.printf("temp= %.2f ºC : humidity= %.2f \% : bat= %.3f v : TempRocio= %.2f ºC \n", temp, humi, bat, dewPointC(temp, humi));
-    Serial.print("Notifications turned off ->"); Serial.printf("esp_get_free_heap_size: %d \n\n", esp_get_free_heap_size());
-  } 
-     
-  if ( (currentMillis - previousMillis) > interval ) 
-  {
-    Serial.printf("Notifications turned on ->esp_get_free_heap_size: %d \n", esp_get_free_heap_size()); 
-    pRemoteCharacteristic_THB->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t*)notificationOn, 2, true);
-    previousMillis = currentMillis;
-    Serial.println( micros());    
+    if(Nueva_Notificacion==true)
+    {
+      Nueva_Notificacion=false; 
+      pRemoteCharacteristic_THB->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t*)notificationOff, 2, true);    
+      Serial.printf("temp= %.2f ºC : humidity= %.2f \% : bat= %.3f v : TempRocio= %.2f ºC \n", temp, humi, bat, dewPointC(temp, humi));
+      Serial.print("Notifications turned off ->"); Serial.printf("esp_get_free_heap_size: %d \n\n", esp_get_free_heap_size());
+    }
+    else
+    if ( ((currentMillis - previousMillis) > interval) ) 
+    {
+      Serial.printf("Notifications turned on ->esp_get_free_heap_size: %d \n", esp_get_free_heap_size()); 
+      pRemoteCharacteristic_THB->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t*)notificationOn, 2, true);
+      previousMillis = currentMillis;
+      Serial.println( micros());    
+    }     
   }
   
   //looptime = millis() - looptime;
